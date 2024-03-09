@@ -3,6 +3,7 @@ import { installGlobals } from "@remix-run/node";
 import compression from "compression";
 import express from "express";
 import morgan from "morgan";
+import { allRoutes } from "./server/routes.ts";
 
 installGlobals();
 
@@ -16,6 +17,7 @@ const viteDevServer =
       );
 
 const remixHandler = createRequestHandler({
+  // @ts-expect-error Something about making this a TypeScript file and potential missing import, but should be OK
   build: viteDevServer
     ? () => viteDevServer.ssrLoadModule("virtual:remix/server-build")
     : await import("./build/server/index.js"),
@@ -45,6 +47,7 @@ app.use(express.static("build/client", { maxAge: "1h" }));
 
 app.use(morgan("tiny"));
 
+allRoutes(app);
 // handle SSR requests
 app.all("*", remixHandler);
 
