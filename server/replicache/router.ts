@@ -1,6 +1,6 @@
 import express from 'express'
-import { pokeRoute } from './routes/poke.ts' 
+import { handlePoke } from './routes/handle-poke.ts' 
 
 export const replicacheRouter = express.Router()
   
-replicacheRouter.use('/poke', pokeRoute)
+replicacheRouter.get('/poke', handlePoke)
