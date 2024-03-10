@@ -4,8 +4,12 @@ import compression from "compression";
 import express from "express";
 import morgan from "morgan";
 import { allRoutes } from "./server/routes.ts";
+import { db } from "./database/db.ts";
+import { createDatabase } from "./database/schema.ts";
 
 installGlobals();
+
+await createDatabase(db);
 
 const viteDevServer =
   process.env.NODE_ENV === "production"
