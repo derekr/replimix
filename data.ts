@@ -1,4 +1,6 @@
-import type {List, Todo, TodoUpdate, Share} from './shared';
+import type {Todo, TodoUpdate} from './shared/todo.ts';
+import type { List } from './shared/list.ts';
+import type { Share } from './shared/share.ts';
 import type {DB} from './database/db.ts';
 
 export type SearchResult = {

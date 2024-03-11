@@ -1,3 +1,3 @@
-export * from './todo';
-export * from './list';
-export * from './share';
+export * from './todo.ts';
+export * from './list.ts';
+export * from './share.ts';
