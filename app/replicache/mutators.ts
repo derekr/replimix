@@ -26,9 +26,9 @@
 // required to get up and running.
 
 import type {WriteTransaction} from 'replicache';
-import {Todo, listTodos, TodoUpdate} from 'shared';
-import {createList, deleteList} from 'shared';
-import {createShare, deleteShare} from 'shared';
+import {Todo, listTodos, TodoUpdate} from '../../shared/todo.ts';
+import {createList, deleteList} from '../../shared/list.ts';
+import {createShare, deleteShare} from '../../shared/share.ts';
 
 export type M = typeof mutators;
 

@@ -45,6 +45,9 @@ if (viteDevServer) {
   );
 }
 
+// POST body parsing
+app.use(express.urlencoded({extended: true}), express.json());
+
 // Everything else (like favicon.ico) is cached for an hour. You may want to be
 // more aggressive with this caching.
 app.use(express.static("build/client", { maxAge: "1h" }));

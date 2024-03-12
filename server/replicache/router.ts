@@ -5,4 +5,4 @@ import { handlePull } from './routes/handle-pull.ts'
 export const replicacheRouter = express.Router()
   
 replicacheRouter.get('/poke', handlePoke)
-replicacheRouter.get('/pull', handlePull)
+replicacheRouter.post('/pull', handlePull)
