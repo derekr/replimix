@@ -15,7 +15,7 @@ export default function IndexRoute() {
         <input name='userID' />
         <input type='submit' value='Change' />
       </Form>
-      <Link to='/todo/4' prefetch='intent'>
+      <Link to='/list/4' prefetch='intent'>
         TODO 4
       </Link>
     </div>
