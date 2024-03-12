@@ -1,102 +1,75 @@
-import { z } from 'zod';
-import type { DB } from './db.ts';
+import type {Executor} from './pg.ts';
 
 const schemaVersion = 4;
 
-export function createDatabase(db: DB) {
+export async function createDatabase(executor: Executor) {
   console.log('creating database');
-  const actualSchemaVersion = getSchemaVersion(db);
+  const actualSchemaVersion = await getSchemaVersion(executor);
   if (schemaVersion !== actualSchemaVersion) {
-    createSchema(db);
+    await createSchema(executor);
   }
 }
 
-export function createSchema(db: DB) {
-  db.prepare(`DROP TABLE IF EXISTS replicache_meta`).run();
-  db.prepare(`DROP TABLE IF EXISTS replicache_client_group`).run();
-  db.prepare(`DROP TABLE IF EXISTS replicache_client`).run();
-  db.prepare(`DROP TABLE IF EXISTS list`).run();
-  db.prepare(`DROP TABLE IF EXISTS share`).run();
-  db.prepare(`DROP TABLE IF EXISTS item`).run();
+export async function createSchema(executor: Executor) {
+  await executor(
+    `drop table if exists replicache_meta, replicache_client_group,
+    replicache_client, list, share, item cascade`,
+  );
 
+  await executor(
+    'create table replicache_meta (key text primary key, value json)',
+  );
+  await executor(
+    "insert into replicache_meta (key, value) values ('schemaVersion', $1)",
+    [schemaVersion],
+  );
 
-db.prepare(
-    `CREATE TABLE replicache_meta (
-       key TEXT PRIMARY KEY, 
-       value TEXT)`
-).run();
+  await executor(`create table replicache_client_group (
+    id varchar(36) primary key not null,
+    userid varchar(36) not null,
+    cvrversion integer not null,
+    lastmodified timestamp(6) not null
+    )`);
 
-db.prepare(
-  `INSERT INTO replicache_meta (key, value)
-   VALUES ('schemaVersion', ?)`
-).run(JSON.stringify({schemaVersion}));
+  await executor(`create table replicache_client (
+    id varchar(36) primary key not null,
+    clientgroupid varchar(36) not null,
+    lastmutationid integer not null,
+    lastmodified timestamp(6) not null
+    )`);
 
-db.prepare(`CREATE TABLE replicache_client_group (
-    id TEXT PRIMARY KEY NOT NULL,
-    userid TEXT NOT NULL,
-    cvrversion INTEGER NOT NULL,
-    lastmodified DATETIME NOT NULL)`)
-.run();
+  await executor(`create table list (
+    id varchar(36) primary key not null,
+    ownerid varchar(36) not null,
+    name text not null,
+    lastmodified timestamp(6) not null
+    )`);
 
-db.prepare(`CREATE TABLE replicache_client (
-    id TEXT PRIMARY KEY NOT NULL,
-    clientgroupid TEXT NOT NULL,
-    lastmutationid INTEGER NOT NULL,
-    lastmodified DATETIME NOT NULL)`)
-.run();
+  await executor(`create table share (
+    id varchar(36) primary key not null,
+    listid varchar(36) not null,
+    userid varchar(36) not null,
+    lastmodified timestamp(6) not null
+    )`);
 
-db.prepare(`CREATE TABLE list (
-    id TEXT PRIMARY KEY NOT NULL,
-    ownerid TEXT NOT NULL,
-    name TEXT NOT NULL,
-    lastmodified DATETIME NOT NULL)`)
-.run();
-
-db.prepare(`CREATE TABLE share (
-    id TEXT PRIMARY KEY NOT NULL,
-    listid TEXT NOT NULL,
-    userid TEXT NOT NULL,
-    lastmodified DATETIME NOT NULL)`)
-.run();
-
-db.prepare(`CREATE TABLE item (
-    id TEXT PRIMARY KEY NOT NULL,
-    listid TEXT NOT NULL,
-    title TEXT NOT NULL,
-    complete INTEGER NOT NULL,
-    ord INTEGER NOT NULL,
-    lastmodified DATETIME NOT NULL)`)
-.run();
-
+  await executor(`create table item (
+    id varchar(36) primary key not null,
+    listid varchar(36) not null,
+    title text not null,
+    complete boolean not null,
+    ord integer not null,
+    lastmodified timestamp(6) not null
+    )`);
 }
 
-const MetaExistsSchema = z.object({
-  name: z.string().optional(),
-}).optional();
-
-const QRSchema = z.object({
-  value: z.string(),
-})
-
-const MetaValueSchema = z.object({
-  schemaVersion: z.coerce.number(),
-}) 
-
-function getSchemaVersion(db: DB) {
-  console.log(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='replicache_meta'`).get())
-  const metaExists = MetaExistsSchema.parse(
-    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='replicache_meta'`).get()
-  );
-  
-  if (!metaExists?.name) { // Check on .name because metaExists is an object and not an array
+async function getSchemaVersion(executor: Executor) {
+  const metaExists = await executor(`select exists(
+    select from pg_tables where schemaname = 'public' and tablename = 'replicache_meta')`);
+  if (!metaExists.rows[0].exists) {
     return 0;
   }
-console.log(db.prepare(
-  `SELECT value FROM replicache_meta WHERE key = 'schemaVersion'`
-).get())
-  const qr = QRSchema.parse(db.prepare(
-    `SELECT value FROM replicache_meta WHERE key = 'schemaVersion'`
-  ).get());
-  
-  return MetaValueSchema.parse(JSON.parse(qr.value)).schemaVersion; // Check on .value similarly as above
+  const qr = await executor(
+    `select value from replicache_meta where key = 'schemaVersion'`,
+  );
+  return qr.rows[0].value;
 }

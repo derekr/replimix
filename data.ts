@@ -1,7 +1,7 @@
+import type {List} from './shared/list.ts';
 import type {Todo, TodoUpdate} from './shared/todo.ts';
-import type { List } from './shared/list.ts';
-import type { Share } from './shared/share.ts';
-import type {DB} from './database/db.ts';
+import type {Share} from './shared/share.ts';
+import type {Executor} from './database/pg.ts';
 
 export type SearchResult = {
   id: string;
@@ -25,51 +25,55 @@ export type Affected = {
   userIDs: string[];
 };
 
-export function createList(
-  db: DB,
+export async function createList(
+  executor: Executor,
   userID: string,
   list: List,
-): Affected {
+): Promise<Affected> {
   if (userID !== list.ownerID) {
     throw new Error('Authorization error, cannot create list for other user');
   }
-  db.prepare(
-    `insert into list (id, ownerid, name, lastmodified) values ($1, $2, $3, now())`).run(list.id, list.ownerID, list.name);
+  await executor(
+    `insert into list (id, ownerid, name, lastmodified) values ($1, $2, $3, now())`,
+    [list.id, list.ownerID, list.name],
+  );
   return {listIDs: [], userIDs: [list.ownerID]};
 }
 
-export function deleteList(
-  db: DB,
+export async function deleteList(
+  executor: Executor,
   userID: string,
   listID: string,
-): Affected {
-  requireAccessToList(db, listID, userID);
-  const userIDs = getAccessors(db, listID);
-  db.prepare(`delete from list where id = $1`).run(listID);
+): Promise<Affected> {
+  await requireAccessToList(executor, listID, userID);
+  const userIDs = await getAccessors(executor, listID);
+  await executor(`delete from list where id = $1`, [listID]);
   return {
     listIDs: [],
     userIDs,
   };
 }
 
-export function searchLists(
-  db: DB,
+export async function searchLists(
+  executor: Executor,
   {accessibleByUserID}: {accessibleByUserID: string},
 ) {
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select id, xmin as rowversion from list where ownerid = $1 or ` +
       `id in (select listid from share where userid = $1)`,
-  ).all(accessibleByUserID);
+    [accessibleByUserID],
+  );
   return rows as SearchResult[];
 }
 
-export function getLists(db: DB, listIDs: string[]) {
+export async function getLists(executor: Executor, listIDs: string[]) {
   if (listIDs.length === 0) return [];
-  const rows = db.prepare(
-    `select id, name, ownerid from list where id in (${getPlaceholders(
+  const {rows} = await executor(
+    `select id, name, ownerID from list where id in (${getPlaceholders(
       listIDs.length,
     )})`,
-  ).all(listIDs) as { id: string; name: string; ownerid: string }[];
+    listIDs,
+  );
   return rows.map(r => {
     const list: List = {
       id: r.id,
@@ -80,59 +84,62 @@ export function getLists(db: DB, listIDs: string[]) {
   });
 }
 
-export function createShare(
-  db: DB,
+export async function createShare(
+  executor: Executor,
   userID: string,
   share: Share,
-): Affected {
-  requireAccessToList(db, share.listID, userID);
-  db.prepare(
-    `insert into share (id, listid, userid, lastmodified) values ($1, $2, $3, now())`
-  ).run(share.id, share.listID, share.userID);
+): Promise<Affected> {
+  await requireAccessToList(executor, share.listID, userID);
+  await executor(
+    `insert into share (id, listid, userid, lastmodified) values ($1, $2, $3, now())`,
+    [share.id, share.listID, share.userID],
+  );
   return {
     listIDs: [share.listID],
     userIDs: [share.userID],
   };
 }
 
-export function deleteShare(
-  db: DB,
+export async function deleteShare(
+  executor: Executor,
   userID: string,
   id: string,
-): Affected {
-  const [share] = getShares(db, [id]);
+): Promise<Affected> {
+  const [share] = await getShares(executor, [id]);
   if (!share) {
     throw new Error("Specified share doesn't exist");
   }
 
-  requireAccessToList(db, share.listID, userID);
-  db.prepare(`delete from share where id = $1`).run(id);
+  await requireAccessToList(executor, share.listID, userID);
+  await executor(`delete from share where id = $1`, [id]);
   return {
     listIDs: [share.listID],
     userIDs: [share.userID],
   };
 }
 
-export function searchShares(
-  db: DB,
+export async function searchShares(
+  executor: Executor,
   {listIDs}: {listIDs: string[]},
 ) {
   if (listIDs.length === 0) return [];
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select s.id, s.xmin as rowversion from share s, list l where s.listid = l.id and l.id in (${getPlaceholders(
       listIDs.length,
-    )})`
-  ).all(listIDs);
+    )})`,
+    listIDs,
+  );
   return rows as SearchResult[];
 }
 
-export function getShares(db: DB, shareIDs: string[]) {
+export async function getShares(executor: Executor, shareIDs: string[]) {
   if (shareIDs.length === 0) return [];
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select id, listid, userid from share where id in (${getPlaceholders(
       shareIDs.length,
     )})`,
-  ).all(shareIDs) as { id: string; listid: string; userid: string }[];
+    shareIDs,
+  );
   return rows.map(r => {
     const share: Share = {
       id: r.id,
@@ -143,84 +150,88 @@ export function getShares(db: DB, shareIDs: string[]) {
   });
 }
 
-export function createTodo(
-  db: DB,
+export async function createTodo(
+  executor: Executor,
   userID: string,
   todo: Omit<Todo, 'sort'>,
-): Affected {
-  requireAccessToList(db, todo.listID, userID);
-  const rows = db.prepare(
+): Promise<Affected> {
+  await requireAccessToList(executor, todo.listID, userID);
+  const {rows} = await executor(
     `select max(ord) as maxord from item where listid = $1`,
-  ).all(todo.listID) as { maxord: number }[];
+    [todo.listID],
+  );
   const maxOrd = rows[0]?.maxord ?? 0;
-  db.prepare(
+  await executor(
     `insert into item (id, listid, title, complete, ord, lastmodified) values ($1, $2, $3, $4, $5, now())`,
-    
-  ).run(todo.id, todo.listID, todo.text, todo.completed, maxOrd + 1);
+    [todo.id, todo.listID, todo.text, todo.completed, maxOrd + 1],
+  );
   return {
     listIDs: [todo.listID],
     userIDs: [],
   };
 }
 
-export function updateTodo(
-  db: DB,
+export async function updateTodo(
+  executor: Executor,
   userID: string,
   update: TodoUpdate,
-): Affected {
-  const todo = mustGetTodo(db, update.id);
-  requireAccessToList(db, todo.listID, userID);
-  db.prepare(
-    `update item set title = coalesce($1, title), complete = coalesce($2, complete), ord = coalesce($3, ord), lastmodified = now() where id = $4`
-  ).run(update.text, update.completed, update.sort, update.id);
+): Promise<Affected> {
+  const todo = await mustGetTodo(executor, update.id);
+  await requireAccessToList(executor, todo.listID, userID);
+  await executor(
+    `update item set title = coalesce($1, title), complete = coalesce($2, complete), ord = coalesce($3, ord), lastmodified = now() where id = $4`,
+    [update.text, update.completed, update.sort, update.id],
+  );
   return {
     listIDs: [todo.listID],
     userIDs: [],
   };
 }
 
-export function deleteTodo(
-  db: DB,
+export async function deleteTodo(
+  executor: Executor,
   userID: string,
   todoID: string,
-): Affected {
-  const todo = mustGetTodo(db, todoID);
-  requireAccessToList(db, todo.listID, userID);
-  db.prepare(`delete from item where id = $1`).run(todoID);
+): Promise<Affected> {
+  const todo = await mustGetTodo(executor, todoID);
+  await requireAccessToList(executor, todo.listID, userID);
+  await executor(`delete from item where id = $1`, [todoID]);
   return {
     listIDs: [todo.listID],
     userIDs: [],
   };
 }
 
-export function searchTodos(
-  db: DB,
+export async function searchTodos(
+  executor: Executor,
   {listIDs}: {listIDs: string[]},
 ) {
   if (listIDs.length === 0) return [];
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select id, xmin as rowversion from item where listid in (${getPlaceholders(
       listIDs.length,
     )})`,
-  ).all(listIDs);
+    listIDs,
+  );
   return rows as SearchResult[];
 }
 
-export function mustGetTodo(db: DB, id: string) {
-  const [todo] = getTodos(db, [id]);
+export async function mustGetTodo(executor: Executor, id: string) {
+  const [todo] = await getTodos(executor, [id]);
   if (!todo) {
     throw new Error('Specified todo does not exist');
   }
   return todo;
 }
 
-export function getTodos(db: DB, todoIDs: string[]) {
+export async function getTodos(executor: Executor, todoIDs: string[]) {
   if (todoIDs.length === 0) return [];
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select id, listid, title, complete, ord from item where id in (${getPlaceholders(
       todoIDs.length,
     )})`,
-  ).all(todoIDs) as { id: string; listid: string; title: string; complete: boolean; ord: number }[];
+    todoIDs,
+  );
   return rows.map(r => {
     const todo: Todo = {
       id: r.id,
@@ -233,29 +244,31 @@ export function getTodos(db: DB, todoIDs: string[]) {
   });
 }
 
-export function putClientGroup(
-  db: DB,
+export async function putClientGroup(
+  executor: Executor,
   clientGroup: ClientGroupRecord,
 ) {
   const {id, userID, cvrVersion} = clientGroup;
-  db.prepare(
+  await executor(
     `insert into replicache_client_group
       (id, userid, cvrversion, lastmodified)
     values
       ($1, $2, $3, now())
     on conflict (id) do update set
       userid = $2, cvrversion = $3, lastmodified = now()`,
-  ).run(id, userID, cvrVersion);
+    [id, userID, cvrVersion],
+  );
 }
 
-export function getClientGroup(
-  db: DB,
+export async function getClientGroup(
+  executor: Executor,
   clientGroupID: string,
   userID: string,
-): ClientGroupRecord {
-  const rows = db.prepare(
+): Promise<ClientGroupRecord> {
+  const {rows} = await executor(
     `select userid, cvrversion from replicache_client_group where id = $1`,
-  ).all(clientGroupID) as { userid: string; cvrversion: number }[];
+    [clientGroupID],
+  );
   if (!rows || rows.length === 0) {
     return {
       id: clientGroupID,
@@ -274,24 +287,26 @@ export function getClientGroup(
   };
 }
 
-export function searchClients(
-  db: DB,
+export async function searchClients(
+  executor: Executor,
   {clientGroupID}: {clientGroupID: string},
 ) {
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select id, lastmutationid as rowversion from replicache_client where clientGroupID = $1`,
-  ).all(clientGroupID);
+    [clientGroupID],
+  );
   return rows as SearchResult[];
 }
 
-export function getClient(
-  db: DB,
+export async function getClient(
+  executor: Executor,
   clientID: string,
   clientGroupID: string,
-): ClientRecord {
-  const rows = db.prepare(
-    `select id, clientgroupid, lastmutationid from replicache_client where id = $1`,
-  ).all(clientID) as { id: string, clientgroupid: string; lastmutationid: number }[];
+): Promise<ClientRecord> {
+  const {rows} = await executor(
+    `select clientgroupid, lastmutationid from replicache_client where id = $1`,
+    [clientID],
+  );
   if (!rows || rows.length === 0)
     return {
       id: clientID,
@@ -311,9 +326,9 @@ export function getClient(
   };
 }
 
-export function putClient(db: DB, client: ClientRecord) {
+export async function putClient(executor: Executor, client: ClientRecord) {
   const {id, clientGroupID, lastMutationID} = client;
-  db.prepare(
+  await executor(
     `
       insert into replicache_client
         (id, clientgroupid, lastmutationid, lastmodified)
@@ -322,25 +337,28 @@ export function putClient(db: DB, client: ClientRecord) {
       on conflict (id) do update set
         lastmutationid = $3, lastmodified = now()
       `,
-  ).run(id, clientGroupID, lastMutationID);
+    [id, clientGroupID, lastMutationID],
+  );
 }
 
-export function getAccessors(db: DB, listID: string) {
-  const rows = db.prepare(
+export async function getAccessors(executor: Executor, listID: string) {
+  const {rows} = await executor(
     `select ownerid as userid from list where id = $1 union ` +
       `select userid from share where listid = $1`,
-  ).all(listID) as { userid: string }[];
+    [listID],
+  );
   return rows.map(r => r.userid) as string[];
 }
 
 async function requireAccessToList(
-  db: DB,
+  executor: Executor,
   listID: string,
   accessingUserID: string,
 ) {
-  const rows = db.prepare(
+  const {rows} = await executor(
     `select 1 from list where id = $1 and (ownerid = $2 or id in (select listid from share where userid = $2))`,
-  ).all(listID, accessingUserID);
+    [listID, accessingUserID],
+  );
   if (rows.length === 0) {
     throw new Error("Authorization error, can't access list");
   }

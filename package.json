@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "remix vite:build",
-    "dev": "node --import=tsimp/import ./server.ts",
+    "dev": "node --env-file=.env --import=tsimp/import ./server.ts",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
-    "start": "cross-env NODE_ENV=production node --import=tsimp/import ./server.ts",
+    "start": "cross-env NODE_ENV=production node --env-file=.env --import=tsimp/import ./server.ts",
     "typecheck": "tsc"
   },
   "dependencies": {
@@ -15,11 +15,12 @@
     "@remix-run/node": "^2.8.1",
     "@remix-run/react": "^2.8.1",
     "@rocicorp/rails": "^0.10.0",
-    "better-sqlite3": "^9.4.3",
+    "@types/pg": "^8.11.2",
     "compression": "^1.7.4",
     "express": "^4.18.2",
     "isbot": "^4.1.0",
     "morgan": "^1.10.0",
+    "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "replicache": "^14.2.2",
@@ -27,7 +28,6 @@
   },
   "devDependencies": {
     "@remix-run/dev": "^2.8.1",
-    "@types/better-sqlite3": "^7.6.9",
     "@types/compression": "^1.7.5",
     "@types/express": "^4.17.20",
     "@types/morgan": "^1.9.9",

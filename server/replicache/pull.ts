@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {PatchOperation, PullResponse} from 'replicache';
 import type Express from 'express';
-import {transact} from '../../database/db.ts';
+import {transact} from '../../database/pg.ts';
 import {
   getClientGroup,
   getLists,
@@ -55,28 +55,31 @@ export async function pull(
   console.log({prevCVR, baseCVR});
 
   // 3: begin transaction
-  const txResult = transact(db => {
+  const txResult = await transact(async executor => {
     // 4-5: getClientGroup(body.clientGroupID), verify user
-    const baseClientGroupRecord = getClientGroup(
-      db,
+    const baseClientGroupRecord = await getClientGroup(
+      executor,
       clientGroupID,
       userID,
     );
 
-    // 6: Read all domain data, just ids and versions
-      const listMeta = searchLists(db, {accessibleByUserID: userID})
+    const [listMeta, clientMeta] = await Promise.all([
+      // 6: Read all domain data, just ids and versions
+      searchLists(executor, {accessibleByUserID: userID}),
       // 7: Read all clients in CG
-      const clientMeta = searchClients(db, {
+      searchClients(executor, {
         clientGroupID,
-      })
+      }),
+    ]);
 
     console.log({baseClientGroupRecord, clientMeta, listMeta});
 
     // 6: Read all domain data, just ids and versions
     const listIDs = listMeta.map(l => l.id);
-    const todoMeta = searchTodos(db, {listIDs});
-    const shareMeta = searchShares(db, {listIDs});
-    
+    const [todoMeta, shareMeta] = await Promise.all([
+      searchTodos(executor, {listIDs}),
+      searchShares(executor, {listIDs}),
+    ]);
     console.log({todoMeta, shareMeta});
 
     // 8: Build nextCVR
@@ -98,10 +101,11 @@ export async function pull(
     }
 
     // 11: get entities
-    const lists = getLists(db, diff.list.puts);
-    const shares = getShares(db, diff.share.puts);
-      const todos = getTodos(db, diff.todo.puts);
-   
+    const [lists, shares, todos] = await Promise.all([
+      getLists(executor, diff.list.puts),
+      getShares(executor, diff.share.puts),
+      getTodos(executor, diff.todo.puts),
+    ]);
     console.log({lists, shares, todos});
 
     // 12: changed clients - no need to re-read clients from database,
@@ -123,7 +127,7 @@ export async function pull(
       cvrVersion: nextCVRVersion,
     };
     console.log({nextClientGroupRecord});
-    putClientGroup(db, nextClientGroupRecord);
+    await putClientGroup(executor, nextClientGroupRecord);
 
     return {
       entities: {
