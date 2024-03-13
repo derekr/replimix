@@ -1,7 +1,9 @@
-import { ClientActionFunctionArgs, Form, useLoaderData, useNavigate } from '@remix-run/react'
+import { ClientActionFunctionArgs, Form, Link, useLoaderData, useNavigate } from '@remix-run/react'
 import { getUserID, setUserID } from './_app-layout'
 import { useReplicache } from '~/replicache/provider'
 import { nanoid } from 'nanoid'
+import { useSubscribe } from 'replicache-react'
+import { listLists } from 'shared/list.ts'
 
 export async function clientAction({ request }: ClientActionFunctionArgs) {
   const previousUserID = getUserID()
@@ -23,6 +25,9 @@ export default function IndexRoute() {
   const replicache = useReplicache()
   const navigate = useNavigate()
 
+  const lists = useSubscribe(replicache, listLists, { default: [] })
+  lists.sort((a, b) => a.name.localeCompare(b.name))
+
   return (
     <div>
       APP{' '}
@@ -32,7 +37,7 @@ export default function IndexRoute() {
       </Form>
       <input
         type='button'
-        value="New List"
+        value='New List'
         onClick={async () => {
           const name = prompt('Enter a new list name')
           if (name) {
@@ -42,6 +47,13 @@ export default function IndexRoute() {
           }
         }}
       />
+      <ul>
+        {lists.map((list) => (
+          <li key={list.id}>
+            <Link to={`/list/${list.id}`}>{list.name}</Link>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
