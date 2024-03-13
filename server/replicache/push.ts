@@ -45,21 +45,21 @@ export async function push(userID: string, requestBody: ReadonlyJSONValue) {
   };
 
   for (const mutation of push.mutations) {
-    const {error, affected} = await processMutation(
-      userID,
-      push.clientGroupID,
-      mutation,
-      false,
-    );
-    if (error) {
-      await processMutation(userID, push.clientGroupID, mutation, true);
-    } else {
+    try {
+      const affected = await processMutation(
+        userID,
+        push.clientGroupID,
+        mutation,
+        false
+      );
       for (const listID of affected.listIDs) {
         allAffected.listIDs.add(listID);
       }
       for (const userID of affected.userIDs) {
         allAffected.userIDs.add(userID);
       }
+    } catch (e) {
+      await processMutation(userID, push.clientGroupID, mutation, true);
     }
   }
 
@@ -82,16 +82,16 @@ async function processMutation(
   mutation: Mutation,
   // 1: `let errorMode = false`. In JS, we implement this step naturally
   // as a param. In case of failure, caller will call us again with `true`.
-  errorMode: boolean,
-): Promise<{error: boolean; affected: Affected}> {
+  errorMode: boolean
+): Promise<Affected> {
   // 2: beginTransaction
-  return await transact(async executor => {
+  return await transact(async (executor) => {
     let affected: Affected = {listIDs: [], userIDs: []};
 
     console.log(
       'Processing mutation',
       errorMode ? 'errorMode' : '',
-      JSON.stringify(mutation, null, ''),
+      JSON.stringify(mutation, null, '')
     );
 
     // 3: `getClientGroup(body.clientGroupID)`
@@ -102,7 +102,7 @@ async function processMutation(
     const baseClient = await getClient(
       executor,
       mutation.clientID,
-      clientGroupID,
+      clientGroupID
     );
 
     // 7: init nextMutationID
@@ -111,9 +111,9 @@ async function processMutation(
     // 8: rollback and skip if already processed.
     if (mutation.id < nextMutationID) {
       console.log(
-        `Mutation ${mutation.id} has already been processed - skipping`,
+        `Mutation ${mutation.id} has already been processed - skipping`
       );
-      return {affected, error: false};
+      return affected;
     }
 
     // 9: Rollback and error if from future.
@@ -132,9 +132,9 @@ async function processMutation(
       } catch (e) {
         // 10(ii)(a-c): log error, abort, and retry
         console.error(
-          `Error executing mutation: ${JSON.stringify(mutation)}: ${e}`,
+          `Error executing mutation: ${JSON.stringify(mutation)}: ${e}`
         );
-        return {error: true, affected};
+        throw e;
       }
     }
 
@@ -151,45 +151,45 @@ async function processMutation(
     ]);
 
     console.log('Processed mutation in', Date.now() - t1);
-    return {error: false, affected};
+    return affected;
   });
 }
 
 async function mutate(
   executor: Executor,
   userID: string,
-  mutation: Mutation,
+  mutation: Mutation
 ): Promise<Affected> {
   switch (mutation.name) {
     case 'createList':
       return await createList(
         executor,
         userID,
-        listSchema.parse(mutation.args),
+        listSchema.parse(mutation.args)
       );
     case 'deleteList':
       return await deleteList(
         executor,
         userID,
-        z.string().parse(mutation.args),
+        z.string().parse(mutation.args)
       );
     case 'createTodo':
       return await createTodo(
         executor,
         userID,
-        todoSchema.omit({sort: true}).parse(mutation.args),
+        todoSchema.omit({sort: true}).parse(mutation.args)
       );
     case 'createShare':
       return await createShare(
         executor,
         userID,
-        shareSchema.parse(mutation.args),
+        shareSchema.parse(mutation.args)
       );
     case 'deleteShare':
       return await deleteShare(
         executor,
         userID,
-        z.string().parse(mutation.args),
+        z.string().parse(mutation.args)
       );
     case 'updateTodo':
       return await updateTodo(
@@ -198,13 +198,13 @@ async function mutate(
         todoSchema
           .partial()
           .merge(todoSchema.pick({id: true}))
-          .parse(mutation.args),
+          .parse(mutation.args)
       );
     case 'deleteTodo':
       return await deleteTodo(
         executor,
         userID,
-        z.string().parse(mutation.args),
+        z.string().parse(mutation.args)
       );
     default:
       return {
