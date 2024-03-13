@@ -35,11 +35,15 @@ export function setUserID(userID: string) {
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
   const serverData = await serverLoader<typeof loader>();
   const userID = getUserID();
+
   return {
     userID,
     ...serverData,
   };
 }
+
+// Make sure clientLoader runs on initial SSR
+clientLoader.hydrate = true
 
 export function HydrateFallback() {
   return <div>loading app…</div>
