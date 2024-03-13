@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { Executor, transact } from "../../database/pg.ts";
-import { getPokeBackend } from "./poke.ts";
+import {z} from 'zod';
+import {Executor, transact} from '../../database/pg.ts';
+import {getPokeBackend} from './poke.ts';
 import {
   createList,
   createTodo,
@@ -14,9 +14,9 @@ import {
   Affected,
   getClientGroup,
   getClient,
-} from "../../data.ts";
-import type { ReadonlyJSONValue } from "replicache";
-import { listSchema, shareSchema, todoSchema } from "../../shared/index.ts";
+} from '../../data.ts';
+import type {ReadonlyJSONValue} from 'replicache';
+import {listSchema, shareSchema, todoSchema} from '../../shared/index.ts';
 
 const mutationSchema = z.object({
   id: z.number(),
@@ -33,7 +33,7 @@ const pushRequestSchema = z.object({
 });
 
 export async function push(userID: string, requestBody: ReadonlyJSONValue) {
-  console.log("Processing push", JSON.stringify(requestBody, null, ""));
+  console.log('Processing push', JSON.stringify(requestBody, null, ''));
 
   const push = pushRequestSchema.parse(requestBody);
 
@@ -71,7 +71,7 @@ export async function push(userID: string, requestBody: ReadonlyJSONValue) {
     pokeBackend.poke(`user/${userID}`);
   }
 
-  console.log("Processed all mutations in", Date.now() - t0);
+  console.log('Processed all mutations in', Date.now() - t0);
 }
 
 // Implements the push algorithm from
@@ -86,12 +86,12 @@ async function processMutation(
 ): Promise<Affected> {
   // 2: beginTransaction
   return await transact(async (executor) => {
-    let affected: Affected = { listIDs: [], userIDs: [] };
+    let affected: Affected = {listIDs: [], userIDs: []};
 
     console.log(
-      "Processing mutation",
-      errorMode ? "errorMode" : "",
-      JSON.stringify(mutation, null, "")
+      'Processing mutation',
+      errorMode ? 'errorMode' : '',
+      JSON.stringify(mutation, null, '')
     );
 
     // 3: `getClientGroup(body.clientGroupID)`
@@ -150,7 +150,7 @@ async function processMutation(
       putClient(executor, nextClient),
     ]);
 
-    console.log("Processed mutation in", Date.now() - t1);
+    console.log('Processed mutation in', Date.now() - t1);
     return affected;
   });
 }
@@ -161,46 +161,46 @@ async function mutate(
   mutation: Mutation
 ): Promise<Affected> {
   switch (mutation.name) {
-    case "createList":
+    case 'createList':
       return await createList(
         executor,
         userID,
         listSchema.parse(mutation.args)
       );
-    case "deleteList":
+    case 'deleteList':
       return await deleteList(
         executor,
         userID,
         z.string().parse(mutation.args)
       );
-    case "createTodo":
+    case 'createTodo':
       return await createTodo(
         executor,
         userID,
-        todoSchema.omit({ sort: true }).parse(mutation.args)
+        todoSchema.omit({sort: true}).parse(mutation.args)
       );
-    case "createShare":
+    case 'createShare':
       return await createShare(
         executor,
         userID,
         shareSchema.parse(mutation.args)
       );
-    case "deleteShare":
+    case 'deleteShare':
       return await deleteShare(
         executor,
         userID,
         z.string().parse(mutation.args)
       );
-    case "updateTodo":
+    case 'updateTodo':
       return await updateTodo(
         executor,
         userID,
         todoSchema
           .partial()
-          .merge(todoSchema.pick({ id: true }))
+          .merge(todoSchema.pick({id: true}))
           .parse(mutation.args)
       );
-    case "deleteTodo":
+    case 'deleteTodo':
       return await deleteTodo(
         executor,
         userID,
