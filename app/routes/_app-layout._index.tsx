@@ -50,7 +50,7 @@ export default function IndexRoute() {
       <ul>
         {lists.map((list) => (
           <li key={list.id}>
-            <Link to={`/list/${list.id}`}>{list.name}</Link>
+            <Link to={`/list/${list.id}`} unstable_viewTransition>{list.name}</Link>
           </li>
         ))}
       </ul>

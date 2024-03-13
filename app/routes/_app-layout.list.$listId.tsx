@@ -38,7 +38,7 @@ export default function ListRoute() {
 
   return (
     <div>
-      List detail: {listId} {list.name} <Link to='/'>Back</Link>
+      List detail: {listId} {list.name} <Link to='/' unstable_viewTransition>Back</Link>
     </div>
   )
 }
